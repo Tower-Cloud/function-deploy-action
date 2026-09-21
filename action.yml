@@ -1,0 +1,77 @@
+name: Tower Cloud function deploy
+description: Build and deploy a Tower Cloud source function from your repository.
+author: Tower Cloud
+
+branding:
+  icon: upload-cloud
+  color: blue
+
+inputs:
+  api-url:
+    description: >-
+      Base URL of the Tower functions API. The generated workflow passes
+      ${{ secrets.TOWER_API_URL }}, written into the repository when auto-deploy
+      was enabled.
+    required: true
+  function-id:
+    description: The Tower function to build. Must match the function the token was minted for.
+    required: true
+  token:
+    description: >-
+      The function's deploy token (repository secret
+      TOWER_FN_DEPLOY_TOKEN_<FUNCTION_ID>). Scoped to starting, reading and
+      cancelling builds for this one function.
+    required: true
+  ref:
+    description: >-
+      The git ref this run fired on. Reported so that a workflow watching a
+      branch the function is not bound to fails loudly instead of quietly
+      building the bound branch. Defaults to the ref of the current run.
+    required: false
+    default: ${{ github.ref_name }}
+  idempotency-key:
+    description: >-
+      Deduplicates retries of the same attempt. Include github.run_attempt so a
+      human clicking "re-run" starts a genuinely new build rather than replaying
+      the previous result.
+    required: false
+    default: ${{ github.sha }}-${{ github.run_attempt }}
+  wait:
+    description: >-
+      Wait for the build to finish and fail the job if it fails. Set to "false"
+      to return as soon as the build is accepted — the build still runs on
+      Tower, but the job stops consuming runner minutes while it does.
+    required: false
+    default: "true"
+  poll-interval-seconds:
+    description: Seconds between build status polls while waiting.
+    required: false
+    default: "5"
+  timeout-seconds:
+    description: >-
+      How long to wait for a build to reach a terminal state. Defaults to 2100s
+      (35m) — Tower's own build timeout is 30m, so a shorter value here would
+      report a timeout for a build that is still legitimately running.
+    required: false
+    default: "2100"
+  cancel:
+    description: >-
+      Cancel mode. Set to "true" in an `if: cancelled()` step to release the
+      Tower build slot when the workflow run is cancelled. Cancelling the runner
+      alone does not stop the build on Tower.
+    required: false
+    default: "false"
+
+outputs:
+  build-id:
+    description: The Tower build id.
+  status:
+    description: Terminal build status (succeeded, failed, cancelled, superseded), or "queued"/"running" when wait is false.
+  image-reference:
+    description: The built image reference, when the build succeeded.
+  image-digest:
+    description: The built image digest, when the build succeeded.
+
+runs:
+  using: node20
+  main: index.js

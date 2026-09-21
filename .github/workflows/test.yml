@@ -1,0 +1,25 @@
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to the runtime declared in action.yml. Passing tests on a newer Node than
+      # the action actually runs on would prove nothing about the action.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --test --test-timeout=20000 'test/*.test.js'
+      # The action ships without dependencies on purpose — it runs straight from source in
+      # tenant repositories. A stray dependency would silently break every install.
+      - name: Fail if a dependency was introduced
+        run: |
+          if [ -f package-lock.json ] || [ -d node_modules ]; then
+            echo "::error::This action must stay dependency-free; it runs unbundled from source."
+            exit 1
+          fi
