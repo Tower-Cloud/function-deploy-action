@@ -5,5 +5,5 @@
   "description": "GitHub Action that builds and deploys a Tower Cloud source function.",
   "license": "MIT",
   "engines": { "node": ">=20" },
-  "scripts": { "test": "node --test --test-timeout=20000 'test/*.test.js'" }
+  "scripts": { "test": "node --test --test-timeout=20000 test/*.test.js" }
 }

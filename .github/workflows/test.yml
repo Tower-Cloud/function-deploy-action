@@ -14,7 +14,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: node --test --test-timeout=20000 'test/*.test.js'
+      # Glob unquoted on purpose: node 20 does not expand globs itself (that came
+      # later), so a quoted pattern reaches it as a literal filename and fails.
+      - run: node --test --test-timeout=20000 test/*.test.js
       # The action ships without dependencies on purpose — it runs straight from source in
       # tenant repositories. A stray dependency would silently break every install.
       - name: Fail if a dependency was introduced
