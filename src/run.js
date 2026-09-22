@@ -38,10 +38,11 @@ function defaultIdempotencyKey() {
 }
 
 async function deploy(core, client, opts) {
-  const { ref, idempotencyKey, wait, pollIntervalMs, timeoutMs } = opts;
+  const { ref, commit, idempotencyKey, wait, pollIntervalMs, timeoutMs } = opts;
 
-  core.info(`Starting a Tower build for function ${client.functionId} from ${ref || 'the bound ref'}.`);
-  const build = await client.startBuild({ ref, idempotencyKey });
+  const from = commit ? `${ref || 'the bound ref'}@${commit.slice(0, 7)}` : (ref || 'the bound ref');
+  core.info(`Starting a Tower build for function ${client.functionId} from ${from}.`);
+  const build = await client.startBuild({ ref, commit, idempotencyKey });
   if (!build?.id) throw new Error('Tower accepted the build but returned no build id.');
 
   // Recorded before anything can fail, so a cancellation a moment from now still knows
@@ -157,6 +158,7 @@ async function run(core, { fetchImpl } = {}) {
     // env vars, so reading them at runtime is both valid and equivalent.
     return await deploy(core, client, {
       ref: core.getInput('ref') || process.env.GITHUB_REF_NAME || '',
+      commit: core.getInput('commit') || process.env.GITHUB_SHA || '',
       idempotencyKey: core.getInput('idempotency-key') || defaultIdempotencyKey(),
       wait: core.getBool('wait', true),
       pollIntervalMs: core.getNumber('poll-interval-seconds', 5) * 1000,

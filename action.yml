@@ -28,6 +28,13 @@ inputs:
       building the bound branch. Defaults to the current run's ref, read from
       GITHUB_REF_NAME at runtime.
     required: false
+  commit:
+    description: >-
+      The exact commit to build. The generated workflow sends the sha of the push
+      being handled, so the build pins to that commit instead of whatever the
+      branch head has become by the time Tower processes the request. Must be on
+      the connected branch; Tower verifies this. Defaults to GITHUB_SHA.
+    required: false
   idempotency-key:
     description: >-
       Deduplicates retries of the same attempt. Defaults to

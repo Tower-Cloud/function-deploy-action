@@ -19,6 +19,7 @@ the function's token; it does not touch your file.
     function-id: 0f43c4de-637c-43f8-b5a6-6f6bba67b382
     token: ${{ secrets.TOWER_FN_DEPLOY_TOKEN_0F43C4DE_637C_43F8_B5A6_6F6BBA67B382 }}
     ref: ${{ github.ref_name }}
+    commit: ${{ github.sha }}
     idempotency-key: ${{ github.sha }}-${{ github.run_attempt }}
 ```
 
@@ -52,6 +53,7 @@ would report a cancellation as a build failure.
 | `function-id` | yes | — | Must match the function the token was minted for. |
 | `token` | yes | — | The function's deploy token. Masked in logs. |
 | `ref` | no | `GITHUB_REF_NAME` | The ref this run fired on. See *Why the ref is sent* below. |
+| `commit` | no | `GITHUB_SHA` | The exact commit to build. Must be on the connected branch; Tower verifies it. See *Why the commit is sent*. |
 | `idempotency-key` | no | `<GITHUB_SHA>-<GITHUB_RUN_ATTEMPT>` | Keep the attempt number in it — see *Re-running a failed build*. |
 | `wait` | no | `true` | `false` returns as soon as the build is accepted. The build still runs; the job stops billing runner minutes while it does. |
 | `poll-interval-seconds` | no | `5` | |
@@ -95,6 +97,18 @@ The server can fill the ref from the function's binding. If it did so silently, 
 workflow edited to watch `develop` would quietly build `main` instead — a wrong deploy
 that looks like a success. Sending the ref turns that into an explicit
 `REF_NOT_IN_CONNECTED_REPO` failure naming the branch problem.
+
+## Why the commit is sent
+
+Sending only a branch name means Tower resolves that branch **when it gets to the
+request**, not when you pushed. There is a 20–40 second window (runner queue plus
+start-up), and a second push inside it moves the branch head. The first push's build then
+builds the *second* push's code, and the commit that actually triggered it is never built
+at all — while the build record claims it built something it did not.
+
+Sending `github.sha` pins the build to the commit that triggered it. Tower still verifies
+that sha is on the connected branch before accepting it, so this does not widen what a
+deploy token may build: a commit from an unmerged branch is `REF_NOT_IN_CONNECTED_REPO`.
 
 ## Re-running a failed build
 

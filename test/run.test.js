@@ -95,7 +95,20 @@ const baseInputs = (url, extra = {}) => ({
   ...extra,
 });
 
-test.beforeEach(() => { delete process.env[BUILD_ID_ENV]; });
+const AMBIENT = ['GITHUB_SHA', 'GITHUB_REF_NAME', 'GITHUB_RUN_ATTEMPT'];
+let savedAmbient;
+test.beforeEach(() => {
+  delete process.env[BUILD_ID_ENV];
+  // These exist on a runner and not on a laptop. Left alone, every assertion about the
+  // request body would depend on where the suite happens to run.
+  savedAmbient = Object.fromEntries(AMBIENT.map((k) => [k, process.env[k]]));
+  for (const k of AMBIENT) delete process.env[k];
+});
+test.afterEach(() => {
+  for (const [k, v] of Object.entries(savedAmbient)) {
+    if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+});
 
 test('a successful build exits 0 and reports the image', async (t) => {
   const s = await srv(t, (req, res, n) => {
@@ -119,14 +132,17 @@ test('the start request sends exactly what a deploy token is allowed to send', a
     if (req.method === 'POST') return ok(res, { id: 'b1', status: 'queued' }, 202);
     return ok(res, { id: 'b1', status: 'succeeded' });
   });
-  const core = fakeCore(t, baseInputs(s.url, { ref: 'main', 'idempotency-key': 'sha-1-1' }));
+  const commit = '4685d7c6f63631774ca7f9b65651b6b381715e19';
+  const core = fakeCore(t, baseInputs(s.url, { ref: 'main', commit, 'idempotency-key': 'sha-1-1' }));
   await run(core);
 
   const start = s.requests[0];
   assert.equal(start.url, '/api/functions/fn-1/builds');
   assert.equal(start.headers.authorization, 'Bearer deploy-token-value');
   assert.equal(start.headers['idempotency-key'], 'sha-1-1');
-  assert.deepEqual(start.body, { source: { type: 'github', ref: 'main' } });
+  // The commit is what makes the build pin to the push that triggered it instead of to
+  // whatever the branch head has drifted to by the time Tower handles the request.
+  assert.deepEqual(start.body, { source: { type: 'github', ref: 'main', commit } });
   // Runtime is inherited from the previous build; a token that could pick one could
   // change what gets built, and the server rejects it outright.
   assert.ok(!('runtime' in start.body), 'must not send a runtime');
@@ -309,4 +325,36 @@ test('explain covers the codes a tenant can actually act on', () => {
   assert.ok(explain({ code: 'REF_NOT_IN_CONNECTED_REPO' }));
   assert.ok(explain({ code: 'BUILD_RATE_LIMITED', details: {} }));
   assert.equal(explain({ code: 'SOMETHING_NEW' }), null, 'unknown codes fall through to the raw message');
+});
+
+test('the commit defaults to the runner\'s GITHUB_SHA', async (t) => {
+  const s = await srv(t, (req, res) => {
+    if (req.method === 'POST') return ok(res, { id: 'b1', status: 'queued' }, 202);
+    return ok(res, { id: 'b1', status: 'succeeded' });
+  });
+  process.env.GITHUB_SHA = '4685d7c6f63631774ca7f9b65651b6b381715e19';
+  process.env.GITHUB_REF_NAME = 'main';
+  process.env.GITHUB_RUN_ATTEMPT = '2';
+  const core = fakeCore(t, { 'api-url': s.url, 'function-id': 'fn-1', token: 't', 'poll-interval-seconds': '1' });
+  await run(core);
+
+  assert.deepEqual(s.requests[0].body.source, {
+    type: 'github', ref: 'main', commit: '4685d7c6f63631774ca7f9b65651b6b381715e19',
+  });
+  // The attempt number must survive into the key, or a failed commit could never be
+  // rebuilt: Tower replays a repeated key and would return the recorded failure forever.
+  assert.equal(s.requests[0].headers['idempotency-key'],
+    '4685d7c6f63631774ca7f9b65651b6b381715e19-2');
+});
+
+test('a run with no commit available still builds the bound ref', async (t) => {
+  // Not every caller is a push event. Omitting the commit must keep meaning "latest on
+  // the branch" rather than becoming an error.
+  const s = await srv(t, (req, res) => {
+    if (req.method === 'POST') return ok(res, { id: 'b1', status: 'queued' }, 202);
+    return ok(res, { id: 'b1', status: 'succeeded' });
+  });
+  const core = fakeCore(t, baseInputs(s.url, { ref: 'main' }));
+  await run(core);
+  assert.deepEqual(s.requests[0].body.source, { type: 'github', ref: 'main' });
 });

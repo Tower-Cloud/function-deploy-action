@@ -111,9 +111,9 @@ class TowerClient {
   // A deploy token may build only the function's declared source: github type, bound
   // repository, bound ref, bound path. Runtime is inherited from the previous build and
   // must NOT be sent — a token that could choose a runtime could change what gets built.
-  startBuild({ ref, idempotencyKey }) {
+  startBuild({ ref, commit, idempotencyKey }) {
     return this.request('POST', `/api/functions/${encodeURIComponent(this.functionId)}/builds`, {
-      body: { source: { type: 'github', ...(ref ? { ref } : {}) } },
+      body: { source: { type: 'github', ...(ref ? { ref } : {}), ...(commit ? { commit } : {}) } },
       headers: idempotencyKey ? { 'idempotency-key': idempotencyKey } : {},
     });
   }
