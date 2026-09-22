@@ -180,6 +180,20 @@ async function run(core, { fetchImpl } = {}) {
     }
     if (err instanceof ApiError) {
       const hint = explain(err);
+      // The function itself is gone. Nothing can restore it and nothing here can succeed
+      // ever again, so this workflow is orphaned — failing every future push would leave a
+      // permanent red X on a repository whose owner did nothing wrong. Distinct from a
+      // revoked token below, which is a fixable problem and must stay loud.
+      if (err.reason === 'DEPLOY_TOKEN_FUNCTION_DELETED') {
+        core.warning(
+          `The Tower function this workflow deploys no longer exists, so there is nothing to ` +
+          `build. You can safely delete this workflow file${
+            process.env.GITHUB_WORKFLOW_REF ? ` (${process.env.GITHUB_WORKFLOW_REF.split('@')[0]})` : ''
+          }.`
+        );
+        core.summary('### Tower function deleted\n\nThis workflow no longer has a function to deploy and can be removed.\n');
+        return 0;
+      }
       if (err.status === 401 || err.status === 403) {
         // NOT treated as orphaned. A revoked or stale token must fail loudly: exiting 0
         // here would report every push as deployed while nothing was built.

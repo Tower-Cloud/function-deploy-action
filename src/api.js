@@ -12,10 +12,11 @@ const TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'superseded']);
 const NEUTRAL = new Set(['cancelled', 'superseded']);
 
 class ApiError extends Error {
-  constructor(message, { status, code, details, requestId } = {}) {
+  constructor(message, { status, code, reason, details, requestId } = {}) {
     super(message);
     this.status = status;
     this.code = code;
+    this.reason = reason;
     this.details = details;
     this.requestId = requestId;
   }
@@ -102,7 +103,17 @@ class TowerClient {
 
       const code = payload?.error?.code;
       const message = payload?.message || `HTTP ${res.status}`;
-      const meta = { status: res.status, code, details: payload?.error?.details, requestId: payload?.error?.requestId };
+      // Tower's auth middlewares leave error.code as the blunt UNAUTHORIZED/FORBIDDEN and
+      // put the specific cause in error.details.reason. Reading only the code would make
+      // every auth failure look identical, which is the difference between "this function
+      // was deleted, stop failing" and "your secret is stale, keep failing".
+      const meta = {
+        status: res.status,
+        code,
+        reason: payload?.error?.details?.reason,
+        details: payload?.error?.details,
+        requestId: payload?.error?.requestId,
+      };
       if (res.status === 404) throw new FunctionGoneError(message, meta);
       throw new ApiError(message, meta);
     }

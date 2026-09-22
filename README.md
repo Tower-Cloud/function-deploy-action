@@ -79,7 +79,7 @@ What the job reports is meant to match what actually happened:
 | build failed | ❌ fail, with the build's error code and message |
 | build **superseded** | ✅ pass, with a notice — a newer commit won the race, which is routine under push-to-deploy |
 | build cancelled | ✅ pass, with a notice |
-| function no longer exists (404) | ⚠️ pass, with a warning to delete the workflow — an orphaned workflow must not leave a permanent red X |
+| **function was deleted** | ⚠️ pass, with a warning to delete the workflow — an orphaned workflow must not leave a permanent red X |
 | **token rejected (401/403)** | ❌ fail — see below |
 | watch timed out | ❌ fail, and the build is **not** cancelled |
 
@@ -87,6 +87,12 @@ A rejected token deliberately **fails** rather than warning-and-passing. Auto-de
 have been disabled, or the token rotated without the repository secret being updated. If
 this exited `0`, every push would report as deployed while nothing was ever built — a
 worse outcome than a visible failure.
+
+A **deleted** function is the opposite case and is told apart from it by
+`error.details.reason` (`DEPLOY_TOKEN_FUNCTION_DELETED` vs `DEPLOY_TOKEN_REVOKED`); both
+arrive as a plain `401`. Nothing can restore a deleted function, so the workflow is simply
+orphaned: it warns, passes, and tells you the file can be removed. Tower also opens a pull
+request removing it for you when the function is deleted.
 
 A watch timeout does not cancel the build: it means this job stopped watching, not that
 the build is wrong. Tower's build timeout governs the build itself.

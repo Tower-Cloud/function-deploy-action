@@ -43,6 +43,16 @@ const ok = (res, data, status = 200) => {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ success: true, message: 'ok', data }));
 };
+// Mirrors Tower's auth envelope: the top-level code is the blunt UNAUTHORIZED, and the
+// specific cause lives in error.details.reason. A fake that put the reason in `code` would
+// let an implementation reading the wrong field pass.
+const authFail = (res, status, reason, message) => {
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({
+    success: false, message,
+    error: { code: status === 403 ? 'FORBIDDEN' : 'UNAUTHORIZED', details: { reason }, requestId: 'req-1' },
+  }));
+};
 const fail = (res, status, code, message, details) => {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ success: false, message, error: { code, details, requestId: 'req-1' } }));
@@ -357,4 +367,28 @@ test('a run with no commit available still builds the bound ref', async (t) => {
   const core = fakeCore(t, baseInputs(s.url, { ref: 'main' }));
   await run(core);
   assert.deepEqual(s.requests[0].body.source, { type: 'github', ref: 'main' });
+});
+
+test('a deleted function warns and passes instead of failing every push forever', async (t) => {
+  const s = await srv(t, (req, res) =>
+    authFail(res, 401, 'DEPLOY_TOKEN_FUNCTION_DELETED', 'the function this deploy token was issued for no longer exists'));
+  const core = fakeCore(t, baseInputs(s.url));
+  const code = await run(core);
+
+  assert.equal(code, 0, 'an orphaned workflow must not leave a permanent red X');
+  assert.match(core.out.warnings.join('\n'), /no longer exists/);
+  assert.equal(core.out.errors.length, 0);
+});
+
+test('a revoked token still fails, and is not confused with a deleted function', async (t) => {
+  // Same status, same top-level code — only the reason differs. If these ever collapse,
+  // either deleted functions fail forever or a stale secret reports every push as deployed.
+  const s = await srv(t, (req, res) =>
+    authFail(res, 401, 'DEPLOY_TOKEN_REVOKED', 'deploy token is no longer valid'));
+  const core = fakeCore(t, baseInputs(s.url));
+  const code = await run(core);
+
+  assert.equal(code, 1, 'a revoked token is fixable and must stay loud');
+  assert.match(core.out.errors.join('\n'), /Re-enable auto-deploy/);
+  assert.equal(core.out.warnings.length, 0);
 });
