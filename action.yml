@@ -9,33 +9,32 @@ branding:
 inputs:
   api-url:
     description: >-
-      Base URL of the Tower functions API. The generated workflow passes
-      ${{ secrets.TOWER_API_URL }}, written into the repository when auto-deploy
-      was enabled.
+      Base URL of the Tower functions API. The generated workflow passes the
+      TOWER_API_URL repository secret, written when auto-deploy was enabled.
     required: true
   function-id:
     description: The Tower function to build. Must match the function the token was minted for.
     required: true
   token:
     description: >-
-      The function's deploy token (repository secret
-      TOWER_FN_DEPLOY_TOKEN_<FUNCTION_ID>). Scoped to starting, reading and
+      The function's deploy token, from the repository secret named
+      TOWER_FN_DEPLOY_TOKEN_<FUNCTION_ID>. Scoped to starting, reading and
       cancelling builds for this one function.
     required: true
   ref:
     description: >-
       The git ref this run fired on. Reported so that a workflow watching a
       branch the function is not bound to fails loudly instead of quietly
-      building the bound branch. Defaults to the ref of the current run.
+      building the bound branch. Defaults to the current run's ref, read from
+      GITHUB_REF_NAME at runtime.
     required: false
-    default: ${{ github.ref_name }}
   idempotency-key:
     description: >-
-      Deduplicates retries of the same attempt. Include github.run_attempt so a
-      human clicking "re-run" starts a genuinely new build rather than replaying
-      the previous result.
+      Deduplicates retries of the same attempt. Defaults to
+      "<GITHUB_SHA>-<GITHUB_RUN_ATTEMPT>" read at runtime, so a network retry of
+      one attempt replays while a human clicking "re-run" is a new attempt and
+      genuinely rebuilds.
     required: false
-    default: ${{ github.sha }}-${{ github.run_attempt }}
   wait:
     description: >-
       Wait for the build to finish and fail the job if it fails. Set to "false"

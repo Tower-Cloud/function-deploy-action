@@ -28,6 +28,15 @@ function explain(err) {
   }
 }
 
+// "<sha>-<attempt>": the attempt number matters. Without it a failed commit could never
+// be rebuilt, because Tower replays a repeated key and would return the recorded failure
+// forever. A network retry keeps one attempt (replays); a human "re-run" increments it.
+function defaultIdempotencyKey() {
+  const sha = process.env.GITHUB_SHA;
+  if (!sha) return '';
+  return `${sha}-${process.env.GITHUB_RUN_ATTEMPT || '1'}`;
+}
+
 async function deploy(core, client, opts) {
   const { ref, idempotencyKey, wait, pollIntervalMs, timeoutMs } = opts;
 
@@ -142,9 +151,13 @@ async function run(core, { fetchImpl } = {}) {
 
     if (core.getBool('cancel', false)) return await cancel(core, client);
 
+    // Defaulted here rather than in action.yml: GitHub evaluates ${{ }} everywhere in
+    // that file — descriptions included — and rejects the whole action if an expression
+    // names a context it does not allow there. The runner exports the same values as
+    // env vars, so reading them at runtime is both valid and equivalent.
     return await deploy(core, client, {
-      ref: core.getInput('ref'),
-      idempotencyKey: core.getInput('idempotency-key'),
+      ref: core.getInput('ref') || process.env.GITHUB_REF_NAME || '',
+      idempotencyKey: core.getInput('idempotency-key') || defaultIdempotencyKey(),
       wait: core.getBool('wait', true),
       pollIntervalMs: core.getNumber('poll-interval-seconds', 5) * 1000,
       timeoutMs: core.getNumber('timeout-seconds', 2100) * 1000,

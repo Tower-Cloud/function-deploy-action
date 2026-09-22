@@ -51,8 +51,8 @@ would report a cancellation as a build failure.
 | `api-url` | yes | — | Base URL of the Tower API. Comes from the `TOWER_API_URL` secret; arrives empty if that secret is missing. Must be `https` (except `localhost`). |
 | `function-id` | yes | — | Must match the function the token was minted for. |
 | `token` | yes | — | The function's deploy token. Masked in logs. |
-| `ref` | no | `${{ github.ref_name }}` | The ref this run fired on. See *Why the ref is sent* below. |
-| `idempotency-key` | no | `${{ github.sha }}-${{ github.run_attempt }}` | Keep `run_attempt` in it — see *Re-running a failed build*. |
+| `ref` | no | `GITHUB_REF_NAME` | The ref this run fired on. See *Why the ref is sent* below. |
+| `idempotency-key` | no | `<GITHUB_SHA>-<GITHUB_RUN_ATTEMPT>` | Keep the attempt number in it — see *Re-running a failed build*. |
 | `wait` | no | `true` | `false` returns as soon as the build is accepted. The build still runs; the job stops billing runner minutes while it does. |
 | `poll-interval-seconds` | no | `5` | |
 | `timeout-seconds` | no | `2100` | How long to wait for a terminal state. Tower's own build timeout is 30m, so shorter values can report a timeout for a healthy build. |
@@ -137,6 +137,15 @@ This action has **no dependencies** and runs directly from source — there is n
 ```yaml
 uses: Tower-Cloud/function-deploy-action@<commit-sha>
 ```
+
+## Note for contributors
+
+`action.yml` must contain **no `${{ }}` expressions at all**, not even inside a
+`description`. GitHub evaluates them when it loads the action and rejects the whole thing
+at job setup if one names a context it does not permit there (`secrets` is the obvious
+trap, since every input here comes from one). Defaults that need runtime values are read
+from environment variables in `src/run.js` instead. `test/action-metadata.test.js`
+enforces this.
 
 ## Development
 
