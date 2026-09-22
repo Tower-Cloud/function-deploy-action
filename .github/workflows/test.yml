@@ -13,7 +13,7 @@ jobs:
       # the action actually runs on would prove nothing about the action.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       # Glob unquoted on purpose: node 20 does not expand globs itself (that came
       # later), so a quoted pattern reaches it as a literal filename and fails.
       - run: node --test --test-timeout=20000 test/*.test.js

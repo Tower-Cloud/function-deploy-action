@@ -40,7 +40,10 @@ test('every input the action reads is declared, and every declared input is read
 });
 
 test('the declared runtime matches the entrypoint that exists', () => {
-  assert.match(yaml, /using:\s*node20/, 'CI pins node 20; action.yml must declare it');
+  // Kept in lockstep with the CI node-version on purpose: GitHub runners now force
+  // node20 actions onto node24 and warn on every run, so testing a runtime the action
+  // does not actually get would prove nothing.
+  assert.match(yaml, /using:\s*node24/, 'CI runs node 24; action.yml must declare it');
   const main = yaml.match(/main:\s*(\S+)/)[1];
   assert.ok(fs.existsSync(path.join(__dirname, '..', main)), `main: ${main} does not exist`);
 });
