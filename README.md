@@ -150,7 +150,7 @@ enforces this.
 ## Development
 
 ```bash
-node --test 'test/*.test.js'
+node --test test/*.test.js
 ```
 
 Tests run against a real local HTTP server rather than a stubbed `fetch`, so the wire
