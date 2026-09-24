@@ -166,6 +166,22 @@ async function run(core, { fetchImpl } = {}) {
     });
   } catch (err) {
     if (err instanceof core.InputError) {
+      // An empty `token` is the common case and it has a specific cause worth naming.
+      // Disabling auto-deploy in Tower DELETES the repository secret, so a workflow left
+      // behind after a disable-then-delete fails here — before it can reach Tower and be
+      // told the function is gone. Without this, the message read as a workflow-authoring
+      // mistake and sent people to check inputs that were never wrong.
+      if (/^Input "token"/.test(err.message)) {
+        core.error(
+          'This workflow has no Tower deploy token: the repository secret it reads is missing or empty. ' +
+          'Tower deletes that secret when auto-deploy is disabled, so the usual cause is that auto-deploy ' +
+          'was turned off (or the function was deleted) and this workflow was left behind — in which case ' +
+          'you can delete this workflow file. If you still want this function to build on push, re-enable ' +
+          'auto-deploy in Tower to mint a fresh token. If the secret was removed by mistake, restoring it ' +
+          'is enough; nothing else here is wrong.'
+        );
+        return 1;
+      }
       core.error(`${err.message} Fix the inputs in this workflow file.`);
       return 1;
     }

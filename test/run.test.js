@@ -413,3 +413,20 @@ test('an empty wallet is reported as a billing problem, not a credential one', a
   assert.doesNotMatch(errors, /delete this workflow/,
     'a temporary balance problem must not be answered with "delete your pipeline"');
 });
+
+// Disabling auto-deploy deletes the repository secret, so a workflow left behind after a
+// disable-then-delete fails on an EMPTY TOKEN — before it can reach Tower and be told the
+// function is gone. The generic "fix the inputs in this workflow file" read as an authoring
+// mistake and sent people to check inputs that were never wrong.
+test('an empty token explains the disable/delete cause instead of blaming the workflow', async (t) => {
+  const core = fakeCore(t, { ...baseInputs('http://unused'), token: '' });
+  const code = await run(core);
+
+  assert.equal(code, 1, 'a missing credential must still fail — nothing was built');
+  const errors = core.out.errors.join('\n');
+  assert.match(errors, /secret/i, 'it must name the secret as the missing thing');
+  assert.match(errors, /auto-deploy was turned off|disabled/i, 'it must name the usual cause');
+  assert.match(errors, /delete this workflow file/i, 'it must tell an orphaned repo what to do');
+  assert.doesNotMatch(errors, /Fix the inputs in this workflow file/,
+    'the generic input error sends people to check inputs that are not wrong');
+});
