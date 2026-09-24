@@ -392,3 +392,24 @@ test('a revoked token still fails, and is not confused with a deleted function',
   assert.match(core.out.errors.join('\n'), /Re-enable auto-deploy/);
   assert.equal(core.out.warnings.length, 0);
 });
+
+// Tower refuses a build when the organization's wallet cannot fund it, and that arrives
+// as 403 — with a perfectly valid token. Observed on dev: the action told the customer
+// their deploy token was rejected and suggested rotating it or deleting the workflow,
+// which sends them to fix the one thing that is not broken and abandons the pipeline over
+// a balance they could top up in a minute.
+test('an empty wallet is reported as a billing problem, not a credential one', async (t) => {
+  const s = await srv(t, (req, res) =>
+    fail(res, 403, 'INSUFFICIENT_WALLET_BALANCE', 'Wallet balance must be greater than 0 to create this resource.'));
+  const core = fakeCore(t, baseInputs(s.url));
+  const code = await run(core);
+
+  assert.equal(code, 1, 'an unfunded build must still fail loudly — nothing was built');
+  const errors = core.out.errors.join('\n');
+  assert.match(errors, /wallet/i, 'the error must name the actual cause');
+  assert.match(errors, /token is fine/i, 'it must say the credential is not the problem');
+  assert.doesNotMatch(errors, /Re-enable auto-deploy/,
+    'rotating the token does not fix an empty wallet');
+  assert.doesNotMatch(errors, /delete this workflow/,
+    'a temporary balance problem must not be answered with "delete your pipeline"');
+});

@@ -194,6 +194,19 @@ async function run(core, { fetchImpl } = {}) {
         core.summary('### Tower function deleted\n\nThis workflow no longer has a function to deploy and can be removed.\n');
         return 0;
       }
+      // A 403 is not always a credential problem. Tower also refuses a build when the
+      // organization's wallet cannot fund it, and that arrives as 403 too — with a
+      // perfectly valid token. Telling those customers to rotate credentials and delete
+      // their workflow sends them to fix the one thing that is not broken, and abandons
+      // the pipeline over a balance they could top up in a minute.
+      if (err.code === 'INSUFFICIENT_WALLET_BALANCE') {
+        core.error(
+          `Tower refused this build because the organization's wallet cannot fund it` +
+          `${err.message ? `: ${err.message}` : '.'} ` +
+          'Your deploy token is fine — top up the wallet and push again, or re-run this job.'
+        );
+        return 1;
+      }
       if (err.status === 401 || err.status === 403) {
         // NOT treated as orphaned. A revoked or stale token must fail loudly: exiting 0
         // here would report every push as deployed while nothing was built.
