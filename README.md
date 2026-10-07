@@ -66,6 +66,7 @@ would report a cancellation as a build failure.
 |---|---|
 | `build-id` | |
 | `status` | Terminal status, or `queued`/`running` when `wait: false`. |
+| `build-succeeded` | `true` only for a completed successful build; use with `status` to gate downstream work. Does not prove deployment readiness. |
 | `image-reference` | Set when the build succeeded. |
 | `image-digest` | Set when the build succeeded. |
 
@@ -78,7 +79,7 @@ What the job reports is meant to match what actually happened:
 | build succeeded | ✅ pass |
 | build failed | ❌ fail, with the build's error code and message |
 | build **superseded** | ✅ pass, with a notice — a newer commit won the race, which is routine under push-to-deploy |
-| build cancelled | ✅ pass, with a notice |
+| build cancelled | ❌ fail; the build did not complete |
 | **function was deleted** | ⚠️ pass, with a warning to delete the workflow — an orphaned workflow must not leave a permanent red X |
 | **token rejected (401/403)** | ❌ fail — see below |
 | watch timed out | ❌ fail, and the build is **not** cancelled |
@@ -176,3 +177,5 @@ node --test test/*.test.js
 Tests run against a real local HTTP server rather than a stubbed `fetch`, so the wire
 contract — auth header, idempotency header, and the exact request body the deploy-token
 pin accepts — is genuinely exercised.
+
+A successful waiting step confirms the **build**, not a Ready deployment. With automatic release off, its summary explicitly says Awaiting release. Release readiness must be checked in Tower. Superseded builds remain non-failing, with `status=superseded` and `build-succeeded=false`; downstream build-dependent steps must check that output. Cancel-mode cleanup (`cancel: true`) still succeeds when cancellation is already complete.

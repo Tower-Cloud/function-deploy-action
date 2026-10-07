@@ -39,6 +39,7 @@ function defaultIdempotencyKey() {
 
 async function deploy(core, client, opts) {
   const { ref, commit, idempotencyKey, wait, pollIntervalMs, timeoutMs } = opts;
+  core.setOutput('build-succeeded', 'false');
 
   const from = commit ? `${ref || 'the bound ref'}@${commit.slice(0, 7)}` : (ref || 'the bound ref');
   core.info(`Starting a Tower build for function ${client.functionId} from ${from}.`);
@@ -90,8 +91,18 @@ async function deploy(core, client, opts) {
   if (current.status === 'succeeded') {
     const img = current.image?.reference ? `\n\nImage: \`${current.image.reference}\`` : '';
     core.info(`Build ${current.id} succeeded.`);
-    core.summary(`### Tower deploy succeeded\n\nBuild \`${current.id}\` for function \`${client.functionId}\`.${img}\n`);
+    core.setOutput('build-succeeded', 'true');
+    const release = current.awaitingDeploy === true
+      ? 'Awaiting release. This job did not deploy the image.'
+      : 'Build completion does not confirm deployment readiness. Check the release in Tower.';
+    core.summary(`### Tower build succeeded\n\nBuild \`${current.id}\` for function \`${client.functionId}\`.${img}\n\n${release}\n`);
     return 0;
+  }
+
+  if (current.status === 'cancelled') {
+    core.error(`Build ${current.id} was cancelled; no successful build or deployment was confirmed.`);
+    core.summary(`### Tower build cancelled\n\nBuild \`${current.id}\` was cancelled.\n`);
+    return 1;
   }
 
   if (NEUTRAL.has(current.status)) {

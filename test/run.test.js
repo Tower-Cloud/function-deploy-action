@@ -430,3 +430,25 @@ test('an empty token explains the disable/delete cause instead of blaming the wo
   assert.doesNotMatch(errors, /Fix the inputs in this workflow file/,
     'the generic input error sends people to check inputs that are not wrong');
 });
+
+for (const awaitingDeploy of [true, false, undefined]) {
+  test(`build success is not deployment success (awaiting=${awaitingDeploy})`, async (t) => {
+    const s = await srv(t, (req, res) => ok(res, { id: 'b1', status: 'succeeded', awaitingDeploy }));
+    const core = fakeCore(t, baseInputs(s.url));
+    assert.equal(await run(core), 0);
+    assert.equal(core.out.outputs['build-succeeded'], 'true');
+    assert.match(core.out.summaries.join('\n'), /Tower build succeeded/);
+    assert.doesNotMatch(core.out.summaries.join('\n'), /Tower deploy succeeded/);
+    if (awaitingDeploy === true) assert.match(core.out.summaries.join('\n'), /Awaiting release/);
+    else assert.match(core.out.summaries.join('\n'), /does not confirm deployment readiness/);
+  });
+}
+
+test('cancelled build fails the waiting step and cannot gate downstream build success', async (t) => {
+  const s = await srv(t, (req, res) => ok(res, { id: 'b1', status: 'cancelled' }));
+  const core = fakeCore(t, baseInputs(s.url));
+  assert.equal(await run(core), 1);
+  assert.equal(core.out.outputs.status, 'cancelled');
+  assert.equal(core.out.outputs['build-succeeded'], 'false');
+  assert.match(core.out.errors.join('\n'), /cancelled/);
+});

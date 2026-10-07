@@ -5,11 +5,9 @@
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'superseded']);
 
-// Statuses that mean "this build did not produce a deploy, but nothing is wrong".
-// A superseded build was retired because a newer commit won the race; a cancelled one was
-// stopped deliberately. Failing the job for either would paint a red X on a run whose
-// outcome was correct.
-const NEUTRAL = new Set(['cancelled', 'superseded']);
+// A newer push legitimately supersedes this attempt; cancellation is an incomplete
+// build and fails a normal waiting step. Cleanup cancel mode remains successful.
+const NEUTRAL = new Set(['superseded']);
 
 class ApiError extends Error {
   constructor(message, { status, code, reason, details, requestId } = {}) {
