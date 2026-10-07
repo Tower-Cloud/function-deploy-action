@@ -69,6 +69,8 @@ inputs:
     default: "false"
 
 outputs:
+  build-succeeded:
+    description: "true only when a waited build succeeded. Does not confirm deployment readiness."
   build-id:
     description: The Tower build id.
   status:
