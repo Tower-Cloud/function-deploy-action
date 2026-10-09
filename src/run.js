@@ -40,6 +40,7 @@ function defaultIdempotencyKey() {
 async function deploy(core, client, opts) {
   const { ref, commit, idempotencyKey, wait, pollIntervalMs, timeoutMs } = opts;
   core.setOutput('build-succeeded', 'false');
+  core.setOutput('deployment-succeeded', 'false');
 
   const from = commit ? `${ref || 'the bound ref'}@${commit.slice(0, 7)}` : (ref || 'the bound ref');
   core.info(`Starting a Tower build for function ${client.functionId} from ${from}.`);
@@ -92,6 +93,33 @@ async function deploy(core, client, opts) {
     const img = current.image?.reference ? `\n\nImage: \`${current.image.reference}\`` : '';
     core.info(`Build ${current.id} succeeded.`);
     core.setOutput('build-succeeded', 'true');
+    if (current.releaseOnPush === true || current.deployment) {
+      while (true) {
+        const outcome = current.deployment;
+        core.setOutput('deployment-status', outcome?.state || 'pending');
+        if (outcome?.state === 'succeeded') {
+          core.setOutput('deployment-succeeded', 'true');
+          core.summary(`### Tower deployment ready\n\nBuild \`${current.id}\` completed and its deployment became ready.${img}\n`);
+          return 0;
+        }
+        if (outcome?.state === 'failed') {
+          core.error(`Build ${current.id} succeeded, but its deployment failed: ${outcome.message || 'Check the deployment in Tower.'}`);
+          core.summary(`### Tower deployment failed\n\nBuild \`${current.id}\` succeeded. Its deployment failed. Check the deployment details in Tower.\n`);
+          return 1;
+        }
+        if (current.releaseBlocked) {
+          core.error(`Build ${current.id} succeeded, but release is blocked [${current.releaseBlocked.code}]: ${current.releaseBlocked.message}`);
+          core.setOutput('deployment-status', 'blocked');
+          return 1;
+        }
+        if (Date.now() >= deadline) {
+          core.error(`Build ${current.id} succeeded, but deployment readiness was not confirmed within ${Math.round(timeoutMs / 1000)}s. Check the release in Tower. This timeout did not cancel the deployment.`);
+          return 1;
+        }
+        await sleep(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())));
+        current = await client.getBuild(build.id);
+      }
+    }
     const release = current.awaitingDeploy === true
       ? 'Awaiting release. This job did not deploy the image.'
       : 'Build completion does not confirm deployment readiness. Check the release in Tower.';

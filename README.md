@@ -57,7 +57,7 @@ would report a cancellation as a build failure.
 | `idempotency-key` | no | `<GITHUB_SHA>-<GITHUB_RUN_ATTEMPT>` | Keep the attempt number in it — see *Re-running a failed build*. |
 | `wait` | no | `true` | `false` returns as soon as the build is accepted. The build still runs; the job stops billing runner minutes while it does. |
 | `poll-interval-seconds` | no | `5` | |
-| `timeout-seconds` | no | `2100` | How long to wait for a terminal state. Tower's own build timeout is 30m, so shorter values can report a timeout for a healthy build. |
+| `timeout-seconds` | no | `2100` | Total time to wait for the build and, when requested, deployment readiness. Tower's own build timeout is 30m, so shorter values can report a timeout for a healthy build. |
 | `cancel` | no | `false` | Cancel mode, for an `if: cancelled()` step. |
 
 ## Outputs
@@ -67,6 +67,8 @@ would report a cancellation as a build failure.
 | `build-id` | |
 | `status` | Terminal status, or `queued`/`running` when `wait: false`. |
 | `build-succeeded` | `true` only for a completed successful build; use with `status` to gate downstream work. Does not prove deployment readiness. |
+| `deployment-status` | Latest recorded release state: `pending`, `succeeded`, `failed`, or `blocked`. Absent for build-only jobs. |
+| `deployment-succeeded` | `true` only when this build’s deployment became ready. Use this to gate deployment-dependent work. |
 | `image-reference` | Set when the build succeeded. |
 | `image-digest` | Set when the build succeeded. |
 
@@ -178,4 +180,8 @@ Tests run against a real local HTTP server rather than a stubbed `fetch`, so the
 contract — auth header, idempotency header, and the exact request body the deploy-token
 pin accepts — is genuinely exercised.
 
-A successful waiting step confirms the **build**, not a Ready deployment. With automatic release off, its summary explicitly says Awaiting release. Release readiness must be checked in Tower. Superseded builds remain non-failing, with `status=superseded` and `build-succeeded=false`; downstream build-dependent steps must check that output. Cancel-mode cleanup (`cancel: true`) still succeeds when cancellation is already complete.
+With `wait: true`, a push build accepted with release-on-push enabled waits for that build's recorded deployment outcome. A failed or blocked release and a readiness timeout fail the job even though `build-succeeded=true`. The timeout covers building and deployment together; it does not cancel either operation. A previously healthy function is not proof that the new image deployed.
+
+With automatic release off, the step confirms the build and its summary says Awaiting release. `deployment-succeeded` stays false. Older APIs without `releaseOnPush` and `deployment` fields retain this build-only behavior; deploy the matching backend contract before adopting the new Action release. This records observed readiness, not ongoing runtime health.
+
+ Superseded builds remain non-failing, with `status=superseded` and `build-succeeded=false`; downstream build-dependent steps must check that output. Cancel-mode cleanup (`cancel: true`) still succeeds when cancellation is already complete.

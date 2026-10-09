@@ -44,7 +44,7 @@ inputs:
     required: false
   wait:
     description: >-
-      Wait for the build to finish and fail the job if it fails. Set to "false"
+      Wait for the build and any requested automatic release to finish. Fail the job on build or deployment failure. Set to "false"
       to return as soon as the build is accepted — the build still runs on
       Tower, but the job stops consuming runner minutes while it does.
     required: false
@@ -55,7 +55,7 @@ inputs:
     default: "5"
   timeout-seconds:
     description: >-
-      How long to wait for a build to reach a terminal state. Defaults to 2100s
+      Total time to wait for build completion and requested deployment readiness. Defaults to 2100s
       (35m) — Tower's own build timeout is 30m, so a shorter value here would
       report a timeout for a build that is still legitimately running.
     required: false
@@ -69,6 +69,10 @@ inputs:
     default: "false"
 
 outputs:
+  deployment-status:
+    description: "Latest recorded deployment state when waiting for a release: pending, succeeded, failed, or blocked."
+  deployment-succeeded:
+    description: "true only when this build’s deployment was confirmed ready; false otherwise."
   build-succeeded:
     description: "true only when a waited build succeeded. Does not confirm deployment readiness."
   build-id:
