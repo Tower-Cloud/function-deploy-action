@@ -452,3 +452,40 @@ test('cancelled build fails the waiting step and cannot gate downstream build su
   assert.equal(core.out.outputs['build-succeeded'], 'false');
   assert.match(core.out.errors.join('\n'), /cancelled/);
 });
+
+test('release-on-push waits for this build deployment to become ready', async (t) => {
+ const s = await srv(t, (req,res,n) => ok(res, {id:'b-1',status:'succeeded',releaseOnPush:true,deployment:n===1?null:{state:n===2?'pending':'succeeded'}}));
+ const core=fakeCore(t,baseInputs(s.url));
+ assert.equal(await run(core),0);
+ assert.equal(s.requests.length,3);
+ assert.equal(core.out.outputs['build-succeeded'],'true');
+ assert.equal(core.out.outputs['deployment-succeeded'],'true');
+ assert.equal(core.out.outputs['deployment-status'],'succeeded');
+});
+
+test('successful build with failed deployment fails the workflow', async(t)=> {
+ const s=await srv(t, (req,res)=>ok(res,{id:'b-1',status:'succeeded',releaseOnPush:true,deployment:{state:'failed',message:'The deployment did not become ready.'}}));
+ const core=fakeCore(t,baseInputs(s.url));
+ assert.equal(await run(core),1);
+ assert.equal(core.out.outputs['build-succeeded'],'true');
+ assert.equal(core.out.outputs['deployment-succeeded'],'false');
+ assert.match(core.out.errors.join('\n'),/deployment failed/);
+});
+
+test('blocked release does not report a successful deployment',async(t)=> {
+ const s=await srv(t,(req,res)=>ok(res,{id:'b-1',status:'succeeded',releaseOnPush:true,releaseBlocked:{code:'WALLET_EMPTY',message:'Add funds before deploying.'}}));
+ const core=fakeCore(t,baseInputs(s.url));
+ assert.equal(await run(core),1);
+ assert.equal(core.out.outputs['deployment-status'],'blocked');
+ assert.equal(core.out.outputs['deployment-succeeded'],'false');
+});
+
+test('release readiness timeout leaves successful build intact and does not cancel', async(t)=> {
+ const s=await srv(t,(req,res)=>ok(res,{id:'b-1',status:'succeeded',releaseOnPush:true}));
+ const core=fakeCore(t,baseInputs(s.url,{'timeout-seconds':'1'}));
+ assert.equal(await run(core),1);
+ assert.equal(core.out.outputs['build-succeeded'],'true');
+ assert.equal(core.out.outputs['deployment-succeeded'],'false');
+ assert.match(core.out.errors.join('\n'),/readiness was not confirmed/);
+ assert.ok(s.requests.every(r=>r.method==='GET'||r.method==='POST'&&!r.url.includes('cancel')));
+});
